@@ -3,6 +3,7 @@ import time
 from SX127x.LoRa import LoRa
 from SX127x.board_config import BOARD
 from SX127x.constants import MODE
+import json
 
 # ---- Force RESET HIGH ----
 GPIO.setwarnings(False)
@@ -39,7 +40,7 @@ print("Self-ping test ready!")
 try:
     while True:
         # SEND phase
-        message = "Self-ping from Pi!"
+        message = json.dumps({"ping": "Self-ping from Pi!"})  # Optional JSON encoding
         print("Sending:", message)
         lora.set_mode(MODE.STDBY)
         time.sleep(0.01)
@@ -80,24 +81,28 @@ try:
         print("Listening for esp32...")
         reg_val = BOARD.spi.xfer2([0x01 & 0x7F, 0x00])
         print("RegOpMode now reads:", hex(reg_val[1]))
+
         rx_timeout = time.time() + 3
         while time.time() < rx_timeout:
             irq_flags = lora.get_irq_flags()
             if irq_flags.get('rx_done'):
                 payload = lora.read_payload(nocheck=True)
                 msg = ''.join([chr(b) for b in payload])
-                print("🎉 Self-received:", msg)
+                print("🎉 Received:", msg)
+                try:
+                    data = json.loads(msg)
+                    print("Parsed JSON:", data)
+                except json.JSONDecodeError:
+                    print("❗ Received data is not valid JSON")
                 lora.clear_irq_flags()
                 break
             time.sleep(0.1)
-            data = json.loads(msg)
-            
         else:
             print("❌ RX timeout.")
         
         time.sleep(5)
 
 except KeyboardInterrupt:
-    print("Exiting self-ping test.")
+    print("Exiting lora_center.")
     lora.set_mode(MODE.SLEEP)
     BOARD.teardown()
